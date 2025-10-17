@@ -14,8 +14,8 @@ This is a Django project. Follow the steps below to set it up and run locally.
 
    ```bash
 
-   git clone https://github.com/valentino-strebel/23_coderr_backend
-   cd 23_coderr_backend/core
+   git clone https://github.com/valentino-strebel/24_quizly_backend
+   cd 24_quizly_backend/core
 
    ```
 
