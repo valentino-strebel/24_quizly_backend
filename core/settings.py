@@ -1,13 +1,16 @@
-from datetime import timedelta
 from pathlib import Path
+from datetime import timedelta
 import os
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'dev-insecure-key-change-me')
-DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-insecure-key-change-me')
+DEBUG = os.getenv('DJANGO_DEBUG', '1') == '1'
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
-ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+PROJECT_NAME = 'core'
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -16,28 +19,27 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
-
+    'corsheaders',
     'authentication',
-
     'quiz',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # No CSRF middleware for JWT cookie-only APIs (optional to include).
-    # 'django.middleware.csrf.CsrfViewMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'config.urls'
+ROOT_URLCONF = 'core.urls'
+WSGI_APPLICATION = 'core.wsgi.application'
 
 TEMPLATES = [
     {
@@ -55,12 +57,15 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.sqlite3'),
+        'NAME': os.getenv('DB_NAME', BASE_DIR / 'db.sqlite3'),
+        'USER': os.getenv('DB_USER', ''),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', ''),
+        'PORT': os.getenv('DB_PORT', ''),
     }
 }
 
@@ -79,7 +84,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# DRF: use JWT only; no SessionAuthentication => no CSRF requirement
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'authentication.auth.CookieJWTAuthentication',
@@ -89,10 +93,9 @@ REST_FRAMEWORK = {
     ),
 }
 
-# SimpleJWT lifetimes
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_MINUTES', '15'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_DAYS', '7'))),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
@@ -100,12 +103,32 @@ SIMPLE_JWT = {
     'SIGNING_KEY': SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_BLACKLIST_ENABLED': True,
 }
 
-# Cookie configuration for tokens
-JWT_COOKIE_SECURE = not DEBUG  # True in production
-JWT_COOKIE_SAMESITE = 'Lax'
-JWT_COOKIE_DOMAIN = os.environ.get('JWT_COOKIE_DOMAIN')  # e.g. ".example.com" or None for localhost
-JWT_ACCESS_COOKIE_NAME = 'access_token'
-JWT_REFRESH_COOKIE_NAME = 'refresh_token'
+JWT_COOKIE_SECURE = os.getenv('JWT_COOKIE_SECURE', '1' if not DEBUG else '0') == '1'
+JWT_COOKIE_SAMESITE = os.getenv('JWT_COOKIE_SAMESITE', 'Lax')
+JWT_COOKIE_DOMAIN = os.getenv('JWT_COOKIE_DOMAIN', '')
+JWT_ACCESS_COOKIE_NAME = os.getenv('JWT_ACCESS_COOKIE_NAME', 'access_token')
+JWT_REFRESH_COOKIE_NAME = os.getenv('JWT_REFRESH_COOKIE_NAME', 'refresh_token')
+
+CSRF_TRUSTED_ORIGINS = [o for o in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if o] or [
+    'http://localhost',
+    'http://127.0.0.1',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+]
+CSRF_COOKIE_NAME = os.getenv('CSRF_COOKIE_NAME', 'csrftoken')
+CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', '1' if not DEBUG else '0') == '1'
+CSRF_COOKIE_SAMESITE = os.getenv('CSRF_COOKIE_SAMESITE', 'Lax')
+CSRF_COOKIE_HTTPONLY = os.getenv('CSRF_COOKIE_HTTPONLY', '0') == '1'
+
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [o for o in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if o]
+
+if DEBUG and not CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS = [
+        'http://localhost',
+        'http://127.0.0.1',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+    ]
