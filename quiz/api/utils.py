@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Tuple
 
 from django.conf import settings
 from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadError, PostProcessingError
+import google.generativeai as genai
 import whisper
 from google import genai
 
@@ -43,27 +45,36 @@ def _ydl_opts(out_dir: Path) -> Dict[str, Any]:
         "noprogress": True,
     }
 
+
 def download_audio(url: str, out_dir: Path | None = None) -> Path:
-    """Download audio as MP3 and return the file path."""
     out = _media_dir("audio") if out_dir is None else out_dir
-    with YoutubeDL(_ydl_opts(out)) as ydl:
-        info = ydl.extract_info(url, download=True)
+    try:
+        with YoutubeDL(_ydl_opts(out)) as ydl:
+            info = ydl.extract_info(url, download=True)
+    except PostProcessingError as e:
+        raise ValueError("Audio extraction failed: ffmpeg not found or misconfigured.") from e
+    except DownloadError as e:
+        raise ValueError("Failed to download YouTube audio. The URL may be unavailable.") from e
     stem = info.get("id")
-    return next((out / f).resolve() for f in (f"{stem}.mp3",))
+    return (out / f"{stem}.mp3").resolve()
+
 
 def transcribe_audio(audio_path: Path, model_name: str | None = None) -> str:
-    """Transcribe audio with Whisper and return text."""
-    name = model_name or getattr(settings, "WHISPER_MODEL", "base")
-    model = whisper.load_model(name)
-    res = model.transcribe(str(audio_path))
+    try:
+        name = model_name or getattr(settings, "WHISPER_MODEL", "base")
+        model = whisper.load_model(name)
+        res = model.transcribe(str(audio_path))
+    except Exception as e:
+        raise ValueError("Transcription failed. Check Whisper/Torch installation and model availability.") from e
     return (res.get("text") or "").strip()
 
+
 def _gemini_client(api_key: str | None = None):
-    """Return configured Gemini client."""
     key = api_key or getattr(settings, "GENAI_API_KEY", "")
     if not key:
         raise ValueError("GENAI_API_KEY is missing.")
-    return genai.Client(api_key=key)
+    genai.configure(api_key=key)
+    return genai
 
 def _quiz_prompt(transcript: str) -> str:
     """Build strict JSON-only prompt for Gemini."""
@@ -77,11 +88,18 @@ def _quiz_prompt(transcript: str) -> str:
     )
 
 def build_quiz_with_gemini(transcript: str, model: str = "gemini-1.5-flash") -> QuizSpec:
-    """Call Gemini Flash and parse the JSON response."""
-    client = _gemini_client()
-    out = client.models.generate_content(model=model, contents=_quiz_prompt(transcript))
-    text = (out.text or "").strip()
-    data = json.loads(text)
+    genai = _gemini_client()
+    gm = genai.GenerativeModel(model)
+    out = gm.generate_content(_quiz_prompt(transcript))
+    text = (getattr(out, "text", "") or "").strip()
+
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.I)
+    try:
+        data = json.loads(text)
+    except ValueError as e:  
+        raise ValueError("LLM did not return valid JSON.") from e
+
     return QuizSpec(
         title=data["title"],
         description=data.get("description", ""),
