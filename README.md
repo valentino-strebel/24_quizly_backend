@@ -87,3 +87,43 @@ Access the project
 App: http://127.0.0.1:8000/
 
 Admin: http://127.0.0.1:8000/admin/
+
+Gemini (Google Generative AI) Setup
+
+This project uses Google’s Gemini API (via the google-genai Python SDK) to generate quiz questions from video transcripts.
+
+Installation
+
+Make sure the SDK is installed:
+
+<pre> ```bash 
+
+pip install google-genai
+ ``` </pre>
+
+Environment Variables
+
+Add the following to your .env file:
+
+<pre> ```bash 
+
+GENAI_API_KEY=your_google_gemini_api_key_here
+ ``` </pre>
+
+Getting an API Key
+
+Go to https://aistudio.google.com/
+
+Sign in with your Google account.
+
+Generate an API key under Get API key.
+
+Copy it into your .env file as shown above.
+
+How it’s used
+
+Your app calls Gemini through the helper function \_gemini_client() in quiz/utils.py to:
+
+Build a quiz from transcribed YouTube videos.
+
+Interact with the Gemini model (default: gemini-1.5-flash).
