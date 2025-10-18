@@ -124,3 +124,9 @@ CORS_ALLOWED_ORIGINS = csv_env(
     "CORS_ALLOWED_ORIGINS",
     "http://localhost,http://127.0.0.1,http://localhost:3000,http://127.0.0.1:3000" if DEBUG else "",
 )
+
+
+MEDIA_ROOT = os.environ.get("MEDIA_ROOT", "media")
+MEDIA_URL = os.environ.get("MEDIA_URL", "/media/")
+WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "base")
+GENAI_API_KEY = os.environ.get("GENAI_API_KEY", "")
