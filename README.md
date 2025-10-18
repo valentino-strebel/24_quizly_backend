@@ -1,74 +1,65 @@
-# Django Project
+Clone the repository
 
-This is a Django project. Follow the steps below to set it up and run locally.
+git clone https://github.com/valentino-strebel/24_quizly_backend
+cd 24_quizly_backend/core
 
-## Prerequisites
+Create and activate a virtual environment
 
-- Python 3.13.2
-- pip (Python package manager)
-- Virtual environment tool
+# On Linux/Mac
 
-## Setup Instructions
+python -m venv venv
+source venv/bin/activate
 
-1. **Clone the repository**
+# (optional) upgrade pip
 
-   ```bash
+python -m pip install --upgrade pip
 
-   git clone https://github.com/valentino-strebel/24_quizly_backend
-   cd 24_quizly_backend/core
+# On Windows (PowerShell)
 
-   ```
+python -m venv venv
+venv\Scripts\Activate
+python -m pip install --upgrade pip
 
-2. **Create and activate a virtual environment**
+Install dependencies
 
-   ```bash
+pip install -r requirements.txt
 
-   # On Linux/Mac
+Create your .env file
 
-   python -m venv venv
-   source venv/bin/activate
+The project reads environment variables from core/.env (same folder as manage.py).
 
-   ```
+# from 24_quizly_backend/core
 
-   ```powershell
+cp env.template .env
 
-   # On Windows
+Generate a secret key and set DJANGO_SECRET_KEY in .env:
 
-   python -m venv venv
-   venv\Scripts\activate
+python - <<'PY'
+import secrets; print(secrets.token_urlsafe(64))
+PY
 
-   ```
+Leave the default SQLite settings as-is to run locally.
 
-3. **Install dependencies**
+Ensure DJANGO_DEBUG=1 and DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
 
-   ```bash
+The provided CORS/CSRF defaults already allow a frontend on http://localhost:3000.
 
-   pip install -r requirements.txt
+Apply database migrations
 
-   ```
+python manage.py migrate
 
-4. **Create a superuser (for admin access)**
+Create a superuser (for admin access)
 
-   ```bash
+python manage.py createsuperuser
 
-   python manage.py createsuperuser
+Run the development server
 
-   ```
+python manage.py runserver
 
-5. **Run the development server**
+The server starts at http://127.0.0.1:8000/
 
-   ```bash
+Access the project
 
-   python manage.py runserver
+App: http://127.0.0.1:8000/
 
-   ```
-
-6. **Access the project**
-
-   ```bash
-
-   Project: http://127.0.0.1:8000/
-
-   Admin panel: http://127.0.0.1:8000/admin/
-
-   ```
+Admin: http://127.0.0.1:8000/admin/
