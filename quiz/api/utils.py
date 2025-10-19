@@ -2,7 +2,7 @@ from __future__ import annotations
 import json, re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, TypedDict, List
 from django.db import transaction
 
 from django.conf import settings
@@ -89,21 +89,34 @@ def _quiz_prompt(transcript: str) -> str:
         "Respond with JSON only, no prose."
     )
 
-def build_quiz_with_gemini(transcript: str, model: str = "gemini-1.5-flash") -> QuizSpec:
+class QuizQuestion(TypedDict):
+    question_title: str
+    question_options: List[str]  # exactly 4
+    answer: str                  # must be one of the options
+
+class QuizSchema(TypedDict):
+    title: str
+    description: str
+    questions: List[QuizQuestion]
+
+def build_quiz_with_gemini(transcript: str, model: str = "gemini-2.5-flash") -> QuizSpec:
     genai_mod = _gemini_client()
+    gm = genai_mod.GenerativeModel(model)
     try:
-        gm = genai_mod.GenerativeModel(model)
-        out = gm.generate_content(_quiz_prompt(transcript))
+        out = gm.generate_content(
+            _quiz_prompt(transcript),
+            # Controlled / structured output:
+            generation_config={
+                "response_mime_type": "application/json",
+                "response_schema": QuizSchema,  # or a genai.types.Schema(...)
+            },
+        )
     except Exception as e:
         raise ValueError(f"Quiz generation upstream error: {e}") from e
 
     text = (getattr(out, "text", "") or "").strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.I)
-
     if not text:
         raise ValueError("LLM returned no content.")
-
     try:
         data = json.loads(text)
     except ValueError as e:
