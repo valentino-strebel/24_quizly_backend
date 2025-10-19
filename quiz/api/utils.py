@@ -3,13 +3,13 @@ import json, re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+from django.db import transaction
 
 from django.conf import settings
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError, PostProcessingError
 import google.generativeai as genai
 import whisper
-from google import genai
 
 YT_RX = re.compile(r"(?:youtu\.be/|v=)([\w\-]{11})")
 
@@ -29,11 +29,13 @@ def validate_youtube_url(url: str) -> bool:
     return parse_youtube_id(url) is not None
 
 def _media_dir(sub: str) -> Path:
-    """Ensure and return MEDIA/<sub> directory."""
-    base = Path(getattr(settings, "MEDIA_ROOT", "media"))
-    p = base / sub
-    p.mkdir(parents=True, exist_ok=True)
-    return p
+    try:
+        base = Path(getattr(settings, "MEDIA_ROOT", "media"))
+        p = base / sub
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    except Exception as e:
+        raise ValueError(f"Cannot prepare media directory: {e}") from e
 
 def _ydl_opts(out_dir: Path) -> Dict[str, Any]:
     """yt-dlp options for bestaudio→mp3 via ffmpeg."""
@@ -88,16 +90,23 @@ def _quiz_prompt(transcript: str) -> str:
     )
 
 def build_quiz_with_gemini(transcript: str, model: str = "gemini-1.5-flash") -> QuizSpec:
-    genai = _gemini_client()
-    gm = genai.GenerativeModel(model)
-    out = gm.generate_content(_quiz_prompt(transcript))
-    text = (getattr(out, "text", "") or "").strip()
+    genai_mod = _gemini_client()
+    try:
+        gm = genai_mod.GenerativeModel(model)
+        out = gm.generate_content(_quiz_prompt(transcript))
+    except Exception as e:
+        raise ValueError(f"Quiz generation upstream error: {e}") from e
 
+    text = (getattr(out, "text", "") or "").strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.I)
+
+    if not text:
+        raise ValueError("LLM returned no content.")
+
     try:
         data = json.loads(text)
-    except ValueError as e:  
+    except ValueError as e:
         raise ValueError("LLM did not return valid JSON.") from e
 
     return QuizSpec(
@@ -122,26 +131,23 @@ def validate_quiz_spec(spec: QuizSpec) -> None:
         _validate_question(q)
 
 def persist_quiz(owner, video_url: str, spec: QuizSpec):
-    """Create Quiz + Questions in DB from spec."""
-    from quiz.models import Quiz, Question  # local import avoids cycles
-    quiz = Quiz.objects.create(
-        owner=owner, title=spec.title, description=spec.description, video_url=video_url
-    )
-    objs = [
-        Question(
-            quiz=quiz,
-            question_title=q["question_title"],
-            question_options=q["question_options"],
-            answer=q["answer"],
-        )
-        for q in spec.questions
-    ]
-    type(quiz).objects.bulk_create([])  # no-op to keep ≤14 lines, safe
-    from django.db import transaction
+    from quiz.models import Quiz, Question
     with transaction.atomic():
-        for o in objs:
-            o.save()
+        quiz = Quiz.objects.create(
+            owner=owner, title=spec.title, description=spec.description, video_url=video_url
+        )
+        questions = [
+            Question(
+                quiz=quiz,
+                question_title=q["question_title"],
+                question_options=q["question_options"],
+                answer=q["answer"],
+            )
+            for q in spec.questions
+        ]
+        Question.objects.bulk_create(questions)
     return quiz
+
 
 def create_quiz_from_url(owner, url: str) -> Any:
     """End-to-end pipeline: URL→audio→transcript→Gemini→persist."""

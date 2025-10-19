@@ -8,9 +8,11 @@ from rest_framework.views import APIView
 from quiz.models import Quiz
 from .serializers import QuizSerializer, QuizPartialUpdateSerializer
 from .utils import validate_youtube_url, create_quiz_from_url
+import logging
+
+logger = logging.getLogger(__name__)
 
 class CreateQuizView(APIView):
-    """POST /api/createQuiz/ — build quiz from a YouTube URL."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -22,7 +24,8 @@ class CreateQuizView(APIView):
             return Response(QuizSerializer(quiz).data, status=201)
         except ValueError as e:
             return Response({"detail": str(e)}, status=400)
-        except Exception:
+        except Exception as e:
+            logger.exception("createQuiz failed")  # ← stacktrace lands in logs
             return Response({"detail": "Internal Server Error"}, status=500)
 
 class UserQuizzesView(generics.ListAPIView):
