@@ -104,9 +104,13 @@ SIMPLE_JWT = {
     "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
 }
 
+def none_if_blank(value: str | None):
+    v = (value or "").strip()
+    return v or None
+
 JWT_COOKIE_SECURE = bool_env("JWT_COOKIE_SECURE", "0" if DEBUG else "1")
 JWT_COOKIE_SAMESITE = os.getenv("JWT_COOKIE_SAMESITE", "Lax")
-JWT_COOKIE_DOMAIN = os.getenv("JWT_COOKIE_DOMAIN", "")
+JWT_COOKIE_DOMAIN = none_if_blank(os.getenv("JWT_COOKIE_DOMAIN", None))  
 JWT_ACCESS_COOKIE_NAME = os.getenv("JWT_ACCESS_COOKIE_NAME", "access_token")
 JWT_REFRESH_COOKIE_NAME = os.getenv("JWT_REFRESH_COOKIE_NAME", "refresh_token")
 
